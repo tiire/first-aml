@@ -49,9 +49,10 @@ public class GetShippingCostTests
                 new CostLine(CostLine.Medium, 8m, "20 cm × 20 cm × 20 cm, 3 kg"),
                 new CostLine(CostLine.Large, 15m, "80 cm × 40 cm × 20 cm, 6 kg"),
                 new CostLine(CostLine.Xl, 25m, "150 cm × 20 cm × 10 cm, 10 kg"),
+                new CostLine(CostLine.MixedMania, -3m, "Mixed parcel mania: every 5th parcel is free"),
             ],
             quote.Lines);
-        Assert.Equal(54m, quote.Total);
+        Assert.Equal(51m, quote.Total);
     }
 
     [Fact]
