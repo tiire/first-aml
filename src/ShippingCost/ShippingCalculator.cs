@@ -23,67 +23,122 @@ public static class ShippingCalculator
     /// Each item is one line, priced by its longest side:
     /// small (all sides under 10 cm) $3, medium (under 50 cm) $8,
     /// large (under 100 cm) $15, XL (any side 100 cm or more) $25.
-    /// Weight above the size limit adds $2 for each kilogram over:
-    /// small 1 kg, medium 3 kg, large 6 kg, XL 10 kg.
-    /// The line description lists that item's length, width, and height,
-    /// and notes how many kilograms it is over the size limit.
+    /// Weight above the size limit is rounded up to the next whole kilogram
+    /// and then charged at $2 per kilogram, so the surcharge is always a multiple of $2.
+    /// Allowances are small 1 kg, medium 3 kg, large 6 kg, and XL 10 kg.
+    /// The line description lists the item's stored length, width, and height in centimeters
+    /// and its stored weight in kilograms, and notes the billed whole kilograms
+    /// over the size limit.
     /// Speedy shipping adds one more line equal to the sum of the item lines,
     /// which doubles the total.
+    /// The returned lines are a fixed copy. The list cannot contain null items.
     /// </summary>
     public static ShippingQuote GetShippingCost(IReadOnlyList<ShippingItem> items, bool isSpeedyShipping = false)
     {
         ArgumentNullException.ThrowIfNull(items);
 
-        var lines = items.Select(PriceItem).ToList();
-        var itemsCost = lines.Sum(line => line.Cost);
+        for (var index = 0; index < items.Count; index++)
+        {
+            if (items[index] is null)
+                throw new ArgumentException($"Item at index {index} is null.", nameof(items));
+        }
+
+        var lines = new List<CostLine>(items.Count + (isSpeedyShipping ? 1 : 0));
+        decimal itemsCost = 0m;
+        foreach (var item in items)
+        {
+            var line = PriceItem(item);
+            lines.Add(line);
+            itemsCost = AddCost(itemsCost, line.Cost);
+        }
 
         if (isSpeedyShipping)
-            lines.Add(new CostLine("speedy", itemsCost, "Speedy shipping"));
+        {
+            lines.Add(new CostLine(CostLine.Speedy, itemsCost, "Speedy shipping"));
+            itemsCost = AddCost(itemsCost, itemsCost);
+        }
 
-        return new ShippingQuote(lines, lines.Sum(line => line.Cost));
+        return new ShippingQuote(lines, itemsCost);
+    }
+
+    private static decimal AddCost(decimal total, decimal cost)
+    {
+        try
+        {
+            return checked(total + cost);
+        }
+        catch (OverflowException)
+        {
+            throw new ArgumentOutOfRangeException("items", "The shipping total is too large.");
+        }
     }
 
     private static CostLine PriceItem(ShippingItem item)
     {
         var longestSide = Math.Max(item.LengthMeters, Math.Max(item.WidthMeters, item.HeightMeters));
-
         var band = BandFor(longestSide);
-        var excessKilograms = item.WeightKilograms - band.WeightLimitKilograms;
-        var surcharge = excessKilograms > 0 ? excessKilograms * OverweightRatePerKilogram : 0m;
-        return new CostLine(band.Type, band.Cost + surcharge, Describe(item, excessKilograms));
+        var billedOverweightKilograms = BilledOverweightKilograms(item.WeightKilograms, band.WeightLimitKilograms);
+        var surcharge = billedOverweightKilograms * OverweightRatePerKilogram;
+        return new CostLine(
+            band.Type,
+            band.Cost + surcharge,
+            Describe(
+                item.LengthMeters,
+                item.WidthMeters,
+                item.HeightMeters,
+                item.WeightKilograms,
+                billedOverweightKilograms));
     }
 
     private static ParcelBand BandFor(decimal longestSide)
     {
         if (longestSide < SmallLimitMeters)
-            return new ParcelBand("small", SmallCost, SmallWeightLimitKilograms);
+            return new ParcelBand(CostLine.Small, SmallCost, SmallWeightLimitKilograms);
         if (longestSide < MediumLimitMeters)
-            return new ParcelBand("medium", MediumCost, MediumWeightLimitKilograms);
+            return new ParcelBand(CostLine.Medium, MediumCost, MediumWeightLimitKilograms);
         if (longestSide < LargeLimitMeters)
-            return new ParcelBand("large", LargeCost, LargeWeightLimitKilograms);
+            return new ParcelBand(CostLine.Large, LargeCost, LargeWeightLimitKilograms);
 
-        return new ParcelBand("xl", XlCost, XlWeightLimitKilograms);
+        return new ParcelBand(CostLine.Xl, XlCost, XlWeightLimitKilograms);
+    }
+
+    /// <summary>
+    /// Allowances are whole kilograms, so ceiling the weight and subtracting the allowance
+    /// stays on a whole kilogram and the surcharge stays a multiple of $2.
+    /// </summary>
+    private static decimal BilledOverweightKilograms(decimal weightKilograms, decimal limitKilograms)
+    {
+        if (weightKilograms <= limitKilograms)
+            return 0m;
+
+        return decimal.Ceiling(weightKilograms) - limitKilograms;
     }
 
     private readonly record struct ParcelBand(string Type, decimal Cost, decimal WeightLimitKilograms);
 
-    private static string Describe(ShippingItem item, decimal excessKilograms)
+    private static string Describe(
+        decimal lengthMeters,
+        decimal widthMeters,
+        decimal heightMeters,
+        decimal weightKilograms,
+        decimal excessKilograms)
     {
         var dimensions = string.Join(
             " × ",
-            FormatMeters(item.LengthMeters),
-            FormatMeters(item.WidthMeters),
-            FormatMeters(item.HeightMeters));
+            FormatCentimeters(lengthMeters),
+            FormatCentimeters(widthMeters),
+            FormatCentimeters(heightMeters));
+        var description = $"{dimensions}, {FormatKilograms(weightKilograms)}";
 
         if (excessKilograms <= 0)
-            return dimensions;
+            return description;
 
-        return $"{dimensions}, {FormatKilograms(excessKilograms)} overweight";
+        return $"{description}, {FormatKilograms(excessKilograms)} overweight";
     }
 
-    private static string FormatMeters(decimal meters) =>
-        FormattableString.Invariant($"{meters:0.#############################} m");
+    private static string FormatCentimeters(decimal meters) =>
+        FormattableString.Invariant($"{meters * 100m:0} cm");
 
     private static string FormatKilograms(decimal kilograms) =>
-        FormattableString.Invariant($"{kilograms:0.#############################} kg");
+        FormattableString.Invariant($"{kilograms:0.###} kg");
 }
