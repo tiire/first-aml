@@ -18,17 +18,23 @@ public static class ShippingCalculator
 
     private const decimal OverweightRatePerKilogram = 2m;
 
+    private const decimal HeavyCost = 50m;
+    private const decimal HeavyWeightLimitKilograms = 50m;
+    private const decimal HeavyOverweightRatePerKilogram = 1m;
+
     /// <summary>
     /// Returns a shipping quote for items measured in meters and weighed in kilograms.
     /// Each item is one line, priced by its longest side:
     /// small (all sides under 10 cm) $3, medium (under 50 cm) $8,
     /// large (under 100 cm) $15, XL (any side 100 cm or more) $25.
-    /// Weight above the size limit is rounded up to the next whole kilogram
-    /// and then charged at $2 per kilogram, so the surcharge is always a multiple of $2.
-    /// Allowances are small 1 kg, medium 3 kg, large 6 kg, and XL 10 kg.
+    /// Weight above a size allowance is rounded up to the next whole kilogram
+    /// and then charged at $2 per kilogram. Allowances are small 1 kg, medium 3 kg,
+    /// large 6 kg, and XL 10 kg.
+    /// A heavy parcel is $50 up to 50 kg and then $1 per whole kilogram over 50 kg.
+    /// Each parcel uses the heavy price when it is lower than the size-based price.
     /// The line description lists the item's stored length, width, and height in centimeters
     /// and its stored weight in kilograms, and notes the billed whole kilograms
-    /// over the size limit.
+    /// over the allowance of the chosen price.
     /// Speedy shipping adds one more line equal to the sum of the item lines,
     /// which doubles the total.
     /// The returned lines are a fixed copy. The list cannot contain null items.
@@ -75,13 +81,35 @@ public static class ShippingCalculator
 
     private static CostLine PriceItem(ShippingItem item)
     {
+        var standard = StandardPrice(item);
+        var heavy = HeavyPrice(item);
+        return heavy.Cost < standard.Cost ? heavy : standard;
+    }
+
+    private static CostLine StandardPrice(ShippingItem item)
+    {
         var longestSide = Math.Max(item.LengthMeters, Math.Max(item.WidthMeters, item.HeightMeters));
         var band = BandFor(longestSide);
         var billedOverweightKilograms = BilledOverweightKilograms(item.WeightKilograms, band.WeightLimitKilograms);
-        var surcharge = billedOverweightKilograms * OverweightRatePerKilogram;
+        var cost = band.Cost + billedOverweightKilograms * OverweightRatePerKilogram;
         return new CostLine(
             band.Type,
-            band.Cost + surcharge,
+            cost,
+            Describe(
+                item.LengthMeters,
+                item.WidthMeters,
+                item.HeightMeters,
+                item.WeightKilograms,
+                billedOverweightKilograms));
+    }
+
+    private static CostLine HeavyPrice(ShippingItem item)
+    {
+        var billedOverweightKilograms = BilledOverweightKilograms(item.WeightKilograms, HeavyWeightLimitKilograms);
+        var cost = HeavyCost + billedOverweightKilograms * HeavyOverweightRatePerKilogram;
+        return new CostLine(
+            CostLine.Heavy,
+            cost,
             Describe(
                 item.LengthMeters,
                 item.WidthMeters,
@@ -104,7 +132,7 @@ public static class ShippingCalculator
 
     /// <summary>
     /// Allowances are whole kilograms, so ceiling the weight and subtracting the allowance
-    /// stays on a whole kilogram and the surcharge stays a multiple of $2.
+    /// stays on a whole kilogram.
     /// </summary>
     private static decimal BilledOverweightKilograms(decimal weightKilograms, decimal limitKilograms)
     {

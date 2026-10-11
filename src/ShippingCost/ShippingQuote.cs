@@ -8,6 +8,7 @@ public sealed record CostLine(string Type, decimal Cost, string Description)
     public const string Medium = "medium";
     public const string Large = "large";
     public const string Xl = "xl";
+    public const string Heavy = "heavy";
     public const string Speedy = "speedy";
 }
 

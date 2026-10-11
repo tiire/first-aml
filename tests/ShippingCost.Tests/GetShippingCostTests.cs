@@ -117,6 +117,52 @@ public class GetShippingCostTests
         Assert.Equal(68m, quote.Total);
     }
 
+    [Theory]
+    [MemberData(nameof(HeavyParcelCases))]
+    public void UsesHeavyParcelWhenItCostsLessThanTheSizeBasedPrice(
+        ShippingItem item,
+        string type,
+        decimal cost,
+        string description)
+    {
+        var quote = ShippingCalculator.GetShippingCost([item]);
+
+        var line = Assert.Single(quote.Lines);
+        Assert.Equal(type, line.Type);
+        Assert.Equal(cost, line.Cost);
+        Assert.Equal(description, line.Description);
+    }
+
+    public static TheoryData<ShippingItem, string, decimal, string> HeavyParcelCases() => new()
+    {
+        { new ShippingItem(0.05m, 0.05m, 0.05m, 30m), CostLine.Heavy, 50m, "5 cm × 5 cm × 5 cm, 30 kg" },
+        { new ShippingItem(0.05m, 0.05m, 0.05m, 50m), CostLine.Heavy, 50m, "5 cm × 5 cm × 5 cm, 50 kg" },
+        { new ShippingItem(0.05m, 0.05m, 0.05m, 50.4m), CostLine.Heavy, 51m, "5 cm × 5 cm × 5 cm, 50.4 kg, 1 kg overweight" },
+        { new ShippingItem(1.20m, 0.20m, 0.20m, 60m), CostLine.Heavy, 60m, "120 cm × 20 cm × 20 cm, 60 kg, 10 kg overweight" },
+        { new ShippingItem(1.20m, 0.20m, 0.20m, 20m), CostLine.Xl, 45m, "120 cm × 20 cm × 20 cm, 20 kg, 10 kg overweight" },
+        { new ShippingItem(0.20m, 0.20m, 0.20m, 24m), CostLine.Medium, 50m, "20 cm × 20 cm × 20 cm, 24 kg, 21 kg overweight" },
+    };
+
+    [Fact]
+    public void SpeedyShippingDoublesTheChosenHeavyPrice()
+    {
+        var quote = ShippingCalculator.GetShippingCost(
+        [
+            new ShippingItem(0.05m, 0.05m, 0.05m, 30m),
+            new ShippingItem(0.05m, 0.05m, 0.05m, 1m),
+        ],
+        isSpeedyShipping: true);
+
+        Assert.Equal(
+            [
+                new CostLine(CostLine.Heavy, 50m, "5 cm × 5 cm × 5 cm, 30 kg"),
+                new CostLine(CostLine.Small, 3m, "5 cm × 5 cm × 5 cm, 1 kg"),
+                new CostLine(CostLine.Speedy, 53m, "Speedy shipping"),
+            ],
+            quote.Lines);
+        Assert.Equal(106m, quote.Total);
+    }
+
     [Fact]
     public void SpeedyShippingAddsALineEqualToTheItemsCostAndDoublesTheTotal()
     {

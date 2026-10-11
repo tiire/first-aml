@@ -19,12 +19,15 @@ Parcel price and weight allowance depend on the longest side:
 | Medium | Under 50 cm      | $8    | 3 kg             |
 | Large  | Under 100 cm     | $15   | 6 kg             |
 | XL     | 100 cm or longer | $25   | 10 kg            |
+| Heavy  | Any size         | $50 up to 50 kg, then $1 per kg | 50 kg |
+
+For each parcel, the heavy price is used when it is lower than the size-based price. An equal price keeps the size-based parcel type.
 
 ## Assumptions
 
 Creating an item rounds each dimension to the nearest centimeter and the weight to the nearest gram, and the item stores those values. A value halfway between two units rounds away from zero. A dimension that rounds to 0 cm, or a weight that rounds to 0 g, is rejected when the item is created. The line description lists those stored dimensions in centimeters and the stored weight in kilograms. The returned lines are a fixed copy of the quote.
 
-When a parcel is over its weight allowance, that gram-rounded weight is rounded up to the next whole kilogram before the excess is priced. The surcharge is $2 for each billed kilogram over the allowance, so overweight is always charged in $2 increments. A weight exactly on the allowance is not rounded up and has no surcharge. The line description also reports those billed whole kilograms.
+When a parcel is over its weight allowance, that gram-rounded weight is rounded up to the next whole kilogram before the excess is priced. The size-based surcharge is $2 for each billed kilogram. The heavy surcharge is $1 for each billed kilogram over 50 kg. A weight exactly on the allowance is not rounded up and has no surcharge. The line description also reports those billed whole kilograms.
 
 Speedy shipping adds one line equal to the sum of the item lines, which doubles the total.
 

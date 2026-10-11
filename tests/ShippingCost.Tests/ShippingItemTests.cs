@@ -88,9 +88,9 @@ public class ShippingItemTests
         var quote = ShippingCalculator.GetShippingCost([item]);
 
         var line = Assert.Single(quote.Lines);
-        Assert.Equal(CostLine.Xl, line.Type);
-        Assert.Equal(205m, line.Cost);
-        Assert.Equal("400 cm × 100 cm × 100 cm, 100 kg, 90 kg overweight", line.Description);
+        Assert.Equal(CostLine.Heavy, line.Type);
+        Assert.Equal(100m, line.Cost);
+        Assert.Equal("400 cm × 100 cm × 100 cm, 100 kg, 50 kg overweight", line.Description);
     }
 
     [Fact]
