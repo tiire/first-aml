@@ -17,12 +17,19 @@ public static class ShippingCalculator
     /// small (all sides under 10 cm) $3, medium (under 50 cm) $8,
     /// large (under 100 cm) $15, XL (any side 100 cm or more) $25.
     /// The line description lists that item's length, width, and height.
+    /// Speedy shipping adds one more line equal to the sum of the item lines,
+    /// which doubles the total.
     /// </summary>
-    public static ShippingQuote GetShippingCost(IReadOnlyList<ShippingItem> items)
+    public static ShippingQuote GetShippingCost(IReadOnlyList<ShippingItem> items, bool isSpeedyShipping = false)
     {
         ArgumentNullException.ThrowIfNull(items);
 
-        var lines = items.Select(PriceItem).ToArray();
+        var lines = items.Select(PriceItem).ToList();
+        var itemsCost = lines.Sum(line => line.Cost);
+
+        if (isSpeedyShipping)
+            lines.Add(new CostLine("speedy", itemsCost, "Speedy shipping"));
+
         return new ShippingQuote(lines, lines.Sum(line => line.Cost));
     }
 

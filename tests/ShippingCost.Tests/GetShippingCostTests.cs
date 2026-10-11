@@ -67,6 +67,52 @@ public class GetShippingCostTests
     }
 
     [Fact]
+    public void SpeedyShippingAddsALineEqualToTheItemsCostAndDoublesTheTotal()
+    {
+        var quote = ShippingCalculator.GetShippingCost(
+        [
+            new ShippingItem(0.05m, 0.05m, 0.05m),
+            new ShippingItem(0.20m, 0.20m, 0.20m),
+            new ShippingItem(1.50m, 0.20m, 0.10m),
+        ],
+        isSpeedyShipping: true);
+
+        Assert.Equal(
+            [
+                new CostLine("small", 3m, "0.05 m × 0.05 m × 0.05 m"),
+                new CostLine("medium", 8m, "0.2 m × 0.2 m × 0.2 m"),
+                new CostLine("xl", 25m, "1.5 m × 0.2 m × 0.1 m"),
+                new CostLine("speedy", 36m, "Speedy shipping"),
+            ],
+            quote.Lines);
+        Assert.Equal(72m, quote.Total);
+    }
+
+    [Fact]
+    public void StandardShippingHasNoSpeedyLine()
+    {
+        IReadOnlyList<ShippingItem> items = [new ShippingItem(0.20m, 0.20m, 0.20m)];
+
+        var standard = ShippingCalculator.GetShippingCost(items, isSpeedyShipping: false);
+        var byDefault = ShippingCalculator.GetShippingCost(items);
+
+        Assert.DoesNotContain(standard.Lines, line => line.Type == "speedy");
+        Assert.Equal(8m, standard.Total);
+        Assert.Equal(standard.Lines, byDefault.Lines);
+        Assert.Equal(standard.Total, byDefault.Total);
+    }
+
+    [Fact]
+    public void SpeedyShippingWithNoItemsAddsAZeroLine()
+    {
+        var quote = ShippingCalculator.GetShippingCost([], isSpeedyShipping: true);
+
+        var line = Assert.Single(quote.Lines);
+        Assert.Equal(new CostLine("speedy", 0m, "Speedy shipping"), line);
+        Assert.Equal(0m, quote.Total);
+    }
+
+    [Fact]
     public void ReturnsAnEmptyQuoteWhenThereAreNoItems()
     {
         var quote = ShippingCalculator.GetShippingCost([]);
